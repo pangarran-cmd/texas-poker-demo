@@ -37,10 +37,23 @@ const APP_STATE = {
     turn: null,
     river: null,
   },
-  countdownTimer: null,
-  viewMode: 'debug',
-  viewerNickname: '',
-};
+ countdownTimer: null,
+viewMode: 'debug',
+viewerNickname: '',
+
+hand: {
+  inProgress: false,
+  phase: 'idle',
+  dealerSeatNo: null,
+  smallBlindSeatNo: null,
+  bigBlindSeatNo: null,
+  actionSeatNo: null,
+  pot: 0,
+  currentBet: 0,
+  minRaiseTo: 0,
+  activeSeatNos: [],
+  deck: [],
+},
 
 function createRoom(name) {
   return {
