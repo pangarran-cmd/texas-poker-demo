@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>朋友局德州扑克 Web App - 本地 Demo</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- 免责声明弹层：必须同意后才能进入 -->
+    <div id="disclaimerOverlay" class="overlay">
+      <div class="overlay-card">
+        <h1>使用前免责声明</h1>
+        <p>
+          本工具仅供朋友之间娱乐和学习使用，不得用于任何形式的真实赌博、现金结算、充值、提现、抽水或其他违法违规用途。任何用户如将本工具用于违法违规行为，相关责任由使用者自行承担。
+        </p>
+        <button id="agreeBtn" class="primary-btn">我已阅读并同意</button>
+      </div>
+    </div>
+
+    <main id="app" class="hidden">
+      <header class="card">
+        <h1>朋友局德州扑克 Web App（本地静态 Demo）</h1>
+        <p class="muted">
+          仅供熟人娱乐学习，使用虚拟筹码，不涉及真实金钱。
+        </p>
+      </header>
+
+      <section class="card">
+        <h2>房间与角色（预留）</h2>
+        <div class="grid-2">
+          <label>
+            选择房间
+            <select id="roomSelect"></select>
+          </label>
+          <label>
+            房间码（预留字段）
+            <input id="roomCode" type="text" placeholder="当前阶段不校验" />
+          </label>
+          <label>
+            你的角色（演示）
+            <select id="roleSelect">
+              <option value="player">玩家</option>
+              <option value="host">房主</option>
+              <option value="admin">管理员</option>
+            </select>
+          </label>
+          <div class="role-tip">
+            角色预留：管理员/房主/玩家。当前 Demo 仅做前端演示。
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>入座</h2>
+        <div class="grid-2">
+          <label>
+            昵称（2~12 字符）
+            <input id="nicknameInput" type="text" maxlength="12" placeholder="请输入昵称" />
+          </label>
+          <label>
+            选择空座位
+            <select id="seatSelect"></select>
+          </label>
+        </div>
+        <button id="joinBtn" class="primary-btn">进入房间并入座</button>
+        <p id="joinMessage" class="message"></p>
+      </section>
+
+      <section class="card">
+        <h2>房主面板（前端演示）</h2>
+        <div class="grid-3">
+          <label>
+            初始筹码
+            <input id="initialChipsInput" type="number" min="1" value="200" />
+          </label>
+          <label>
+            小盲
+            <input id="smallBlindInput" type="number" min="1" value="1" />
+          </label>
+          <label>
+            大盲
+            <input id="bigBlindInput" type="number" min="1" value="2" />
+          </label>
+        </div>
+        <button id="applyTableConfigBtn">应用牌桌设置</button>
+        <button id="dealBtn" class="primary-btn">开始演示发牌</button>
+      </section>
+
+      <section class="card">
+        <h2>公共牌区</h2>
+        <div class="board-row">
+          <div>
+            <h3>翻牌</h3>
+            <div id="flopCards" class="cards"></div>
+          </div>
+          <div>
+            <h3>转牌</h3>
+            <div id="turnCard" class="cards"></div>
+          </div>
+          <div>
+            <h3>河牌</h3>
+            <div id="riverCard" class="cards"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>行动倒计时（预留）</h2>
+        <p>
+          默认每次行动时间：<strong>45 秒</strong>（当前演示 UI，不接入完整下注流）。
+        </p>
+        <div id="countdown" class="countdown">45</div>
+        <button id="startCountdownBtn">开始倒计时演示</button>
+      </section>
+
+      <section class="card">
+        <h2>12 人座位区（当前房间）</h2>
+        <div id="seatsContainer" class="seats"></div>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
