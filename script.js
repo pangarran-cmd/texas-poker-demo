@@ -303,27 +303,113 @@ function getSeatCardsForView(seat) {
 
 function dealDemoHand() {
   const room = APP_STATE.rooms[APP_STATE.currentRoomId];
-  const activeSeats = room.seats.filter((seat) => ['已入座', '等待下一局'].includes(seat.status));
+  const seated = room.seats.filter((seat) => ['已入座', '等待下一局'].includes(seat.status));
 
-  if (activeSeats.length < 2) {
-    el.joinMessage.textContent = '至少需要 2 名玩家入座，才能演示发牌。';
+  if (seated.length < 2) {
+    el.joinMessage.textContent = '至少需要 2 名玩家入座，才能开始一手牌。';
     return;
   }
 
-  const deck = createShuffledDeck();
+  startNewHand(room, seated);
+  renderBoard();
+  renderSeats();
+  el.joinMessage.textContent = `新一手开始，当前阶段：${APP_STATE.hand.phase}`;
+}
 
-  activeSeats.forEach((seat) => {
-    seat.cards = [deck.pop(), deck.pop()];
+function startNewHand(room, seatedSeats) {
+  resetHandRuntime();
+  APP_STATE.hand.inProgress = true;
+  APP_STATE.hand.phase = 'preflop';
+
+  APP_STATE.hand.deck = createShuffledDeck();
+  APP_STATE.hand.activeSeatNos = seatedSeats.map((s) => s.seatNo);
+
+  // v0.2 最小骨架：先用固定规则确定按钮位（后续再做轮转）
+  APP_STATE.hand.dealerSeatNo = Math.min(...APP_STATE.hand.activeSeatNos);
+  APP_STATE.hand.smallBlindSeatNo = getNextActiveSeatNo(APP_STATE.hand.dealerSeatNo);
+  APP_STATE.hand.bigBlindSeatNo = getNextActiveSeatNo(APP_STATE.hand.smallBlindSeatNo);
+  APP_STATE.hand.actionSeatNo = getNextActiveSeatNo(APP_STATE.hand.bigBlindSeatNo);
+
+  postBlinds(room);
+  dealHoleCards(room);
+  initBoardAsHidden();
+}
+
+function resetHandRuntime() {
+  APP_STATE.hand.inProgress = false;
+  APP_STATE.hand.phase = 'idle';
+  APP_STATE.hand.dealerSeatNo = null;
+  APP_STATE.hand.smallBlindSeatNo = null;
+  APP_STATE.hand.bigBlindSeatNo = null;
+  APP_STATE.hand.actionSeatNo = null;
+  APP_STATE.hand.pot = 0;
+  APP_STATE.hand.currentBet = 0;
+  APP_STATE.hand.minRaiseTo = 0;
+  APP_STATE.hand.activeSeatNos = [];
+  APP_STATE.hand.deck = [];
+}
+
+function getNextActiveSeatNo(fromSeatNo) {
+  const actives = [...APP_STATE.hand.activeSeatNos].sort((a, b) => a - b);
+  if (!actives.length) return null;
+  const next = actives.find((no) => no > fromSeatNo);
+  return next ?? actives[0];
+}
+
+function postBlinds(room) {
+  const sbSeat = room.seats[APP_STATE.hand.smallBlindSeatNo - 1];
+  const bbSeat = room.seats[APP_STATE.hand.bigBlindSeatNo - 1];
+  const sb = Math.min(APP_STATE.config.smallBlind, sbSeat.chips);
+  const bb = Math.min(APP_STATE.config.bigBlind, bbSeat.chips);
+
+  sbSeat.chips -= sb;
+  bbSeat.chips -= bb;
+
+  APP_STATE.hand.pot = sb + bb;
+  APP_STATE.hand.currentBet = bb;
+  APP_STATE.hand.minRaiseTo = bb * 2;
+}
+
+function dealHoleCards(room) {
+  APP_STATE.hand.activeSeatNos.forEach((seatNo) => {
+    const seat = room.seats[seatNo - 1];
+    seat.cards = [APP_STATE.hand.deck.pop(), APP_STATE.hand.deck.pop()];
     seat.status = '本手参与中';
   });
+}
 
-  APP_STATE.board.flop = [deck.pop(), deck.pop(), deck.pop()];
-  APP_STATE.board.turn = deck.pop();
-  APP_STATE.board.river = deck.pop();
+function initBoardAsHidden() {
+  APP_STATE.board.flop = [];
+  APP_STATE.board.turn = null;
+  APP_STATE.board.river = null;
+}
+
+function advancePhase() {
+  if (!APP_STATE.hand.inProgress) return;
+
+  if (APP_STATE.hand.phase === 'preflop') {
+    APP_STATE.hand.phase = 'flop';
+    APP_STATE.board.flop = [
+      APP_STATE.hand.deck.pop(),
+      APP_STATE.hand.deck.pop(),
+      APP_STATE.hand.deck.pop(),
+    ];
+  } else if (APP_STATE.hand.phase === 'flop') {
+    APP_STATE.hand.phase = 'turn';
+    APP_STATE.board.turn = APP_STATE.hand.deck.pop();
+  } else if (APP_STATE.hand.phase === 'turn') {
+    APP_STATE.hand.phase = 'river';
+    APP_STATE.board.river = APP_STATE.hand.deck.pop();
+  } else if (APP_STATE.hand.phase === 'river') {
+    APP_STATE.hand.phase = 'showdown';
+  } else if (APP_STATE.hand.phase === 'showdown') {
+    APP_STATE.hand.phase = 'idle';
+    APP_STATE.hand.inProgress = false;
+  }
 
   renderBoard();
   renderSeats();
-  el.joinMessage.textContent = '已完成本地演示发牌（将按当前视角模式展示手牌）。';
+  el.joinMessage.textContent = `阶段推进：${APP_STATE.hand.phase}`;
 }
 
 function createShuffledDeck() {
