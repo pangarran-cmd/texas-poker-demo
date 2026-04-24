@@ -1,0 +1,364 @@
+/**
+ * 朋友局德州扑克 Web App - 本地静态 Demo
+ * 说明：
+ * - 代码尽量写得直白，方便新手阅读。
+ * - 当前不接后端，只在浏览器内存中保存数据。
+ */
+
+const APP_STATE = {
+  agreed: false,
+  currentRoomId: 'A',
+  currentRole: 'player',
+  config: {
+    initialChips: 200,
+    smallBlind: 1,
+    bigBlind: 2,
+    actionTimeSeconds: 45,
+  },
+  // 预留角色概念
+  roles: ['admin', 'host', 'player'],
+  // 预留座位状态枚举
+  seatStatuses: [
+    '空位',
+    '已入座',
+    '本手参与中',
+    '等待下一局',
+    '暂时离开',
+    '已弃牌',
+    'All-in',
+    '离桌',
+  ],
+  rooms: {
+    A: createRoom('房间 A'),
+    B: createRoom('房间 B'),
+  },
+  board: {
+    flop: [],
+    turn: null,
+    river: null,
+  },
+  countdownTimer: null,
+};
+
+function createRoom(name) {
+  return {
+    id: name.endsWith('A') ? 'A' : 'B',
+    name,
+    roomCode: '', // 当前阶段预留字段
+    seats: Array.from({ length: 12 }, (_, i) => createEmptySeat(i + 1)),
+  };
+}
+
+function createEmptySeat(index) {
+  return {
+    seatNo: index,
+    nickname: '',
+    status: '空位',
+    chips: 0,
+    // 补码与清算相关字段（第一版先记录结构）
+    ledger: {
+      initialBuyIn: 0,
+      systemTopUpTotal: 0,
+      carryOutChips: 0,
+      netWinLoss: 0,
+    },
+    cards: [],
+  };
+}
+
+const el = {
+  disclaimerOverlay: document.getElementById('disclaimerOverlay'),
+  agreeBtn: document.getElementById('agreeBtn'),
+  app: document.getElementById('app'),
+  roomSelect: document.getElementById('roomSelect'),
+  roomCode: document.getElementById('roomCode'),
+  roleSelect: document.getElementById('roleSelect'),
+  nicknameInput: document.getElementById('nicknameInput'),
+  seatSelect: document.getElementById('seatSelect'),
+  joinBtn: document.getElementById('joinBtn'),
+  joinMessage: document.getElementById('joinMessage'),
+  initialChipsInput: document.getElementById('initialChipsInput'),
+  smallBlindInput: document.getElementById('smallBlindInput'),
+  bigBlindInput: document.getElementById('bigBlindInput'),
+  applyTableConfigBtn: document.getElementById('applyTableConfigBtn'),
+  dealBtn: document.getElementById('dealBtn'),
+  flopCards: document.getElementById('flopCards'),
+  turnCard: document.getElementById('turnCard'),
+  riverCard: document.getElementById('riverCard'),
+  seatsContainer: document.getElementById('seatsContainer'),
+  countdown: document.getElementById('countdown'),
+  startCountdownBtn: document.getElementById('startCountdownBtn'),
+};
+
+init();
+
+function init() {
+  bindEvents();
+  renderRoomOptions();
+  renderSeatOptions();
+  renderSeats();
+}
+
+function bindEvents() {
+  el.agreeBtn.addEventListener('click', () => {
+    APP_STATE.agreed = true;
+    el.disclaimerOverlay.classList.add('hidden');
+    el.app.classList.remove('hidden');
+  });
+
+  el.roomSelect.addEventListener('change', (event) => {
+    APP_STATE.currentRoomId = event.target.value;
+    renderSeatOptions();
+    renderSeats();
+  });
+
+  el.roleSelect.addEventListener('change', (event) => {
+    APP_STATE.currentRole = event.target.value;
+  });
+
+  el.joinBtn.addEventListener('click', handleJoinSeat);
+
+  el.applyTableConfigBtn.addEventListener('click', () => {
+    APP_STATE.config.initialChips = Math.max(1, Number(el.initialChipsInput.value) || 200);
+    APP_STATE.config.smallBlind = Math.max(1, Number(el.smallBlindInput.value) || 1);
+    APP_STATE.config.bigBlind = Math.max(1, Number(el.bigBlindInput.value) || 2);
+    el.joinMessage.textContent = `已更新牌桌设置：初始筹码 ${APP_STATE.config.initialChips}，小盲/大盲 ${APP_STATE.config.smallBlind}/${APP_STATE.config.bigBlind}`;
+  });
+
+  el.dealBtn.addEventListener('click', dealDemoHand);
+  el.startCountdownBtn.addEventListener('click', startCountdownDemo);
+}
+
+function renderRoomOptions() {
+  el.roomSelect.innerHTML = '';
+  Object.keys(APP_STATE.rooms).forEach((roomId) => {
+    const option = document.createElement('option');
+    option.value = roomId;
+    option.textContent = APP_STATE.rooms[roomId].name;
+    el.roomSelect.appendChild(option);
+  });
+}
+
+function renderSeatOptions() {
+  const room = APP_STATE.rooms[APP_STATE.currentRoomId];
+  const emptySeats = room.seats.filter((seat) => seat.status === '空位');
+
+  el.seatSelect.innerHTML = '';
+  emptySeats.forEach((seat) => {
+    const option = document.createElement('option');
+    option.value = String(seat.seatNo);
+    option.textContent = `${seat.seatNo}号位`;
+    el.seatSelect.appendChild(option);
+  });
+}
+
+function handleJoinSeat() {
+  const room = APP_STATE.rooms[APP_STATE.currentRoomId];
+  const nickname = el.nicknameInput.value.trim();
+  const seatNo = Number(el.seatSelect.value);
+
+  if (nickname.length < 2 || nickname.length > 12) {
+    el.joinMessage.textContent = '昵称长度需为 2~12 字符。';
+    return;
+  }
+
+  const nameExists = room.seats.some((seat) => seat.nickname === nickname);
+  if (nameExists) {
+    el.joinMessage.textContent = '同一房间内昵称不可重复。';
+    return;
+  }
+
+  const seat = room.seats.find((s) => s.seatNo === seatNo);
+  if (!seat || seat.status !== '空位') {
+    el.joinMessage.textContent = '请选择空座位。';
+    return;
+  }
+
+  seat.nickname = nickname;
+  seat.status = '已入座';
+  seat.chips = APP_STATE.config.initialChips;
+  seat.ledger.initialBuyIn = APP_STATE.config.initialChips;
+
+  el.joinMessage.textContent = `${nickname} 已进入 ${room.name} 的 ${seat.seatNo}号位。`;
+  el.nicknameInput.value = '';
+
+  renderSeatOptions();
+  renderSeats();
+}
+
+function renderSeats() {
+  const room = APP_STATE.rooms[APP_STATE.currentRoomId];
+  el.seatsContainer.innerHTML = '';
+
+  room.seats.forEach((seat) => {
+    const seatDiv = document.createElement('article');
+    seatDiv.className = 'seat';
+
+    const statusClass = getStatusClass(seat.status);
+    const cards = seat.cards.length ? seat.cards.join(' ') : '-- --';
+
+    seatDiv.innerHTML = `
+      <div class="seat-head">
+        <strong>${seat.seatNo}号位</strong>
+        <span class="status ${statusClass}">${seat.status}</span>
+      </div>
+      <div>昵称：${seat.nickname || '（空）'}</div>
+      <div>当前筹码：${seat.chips}</div>
+      <div>手牌：${cards}</div>
+      <div>总买入：${seat.ledger.initialBuyIn + seat.ledger.systemTopUpTotal}</div>
+      <div>系统补码：${seat.ledger.systemTopUpTotal}</div>
+      <div>带出筹码：${seat.ledger.carryOutChips}</div>
+      <div>净输赢：${seat.ledger.netWinLoss}</div>
+      <div class="seat-actions">
+        <button onclick="setAway(${seat.seatNo})">暂时离开</button>
+        <button onclick="returnSeat(${seat.seatNo})">返回</button>
+        <button onclick="kickSeat(${seat.seatNo})">房主剔除</button>
+      </div>
+    `;
+
+    el.seatsContainer.appendChild(seatDiv);
+  });
+}
+
+function getStatusClass(status) {
+  if (status === '空位') return 'status-empty';
+  if (status === '暂时离开') return 'status-away';
+  if (status === '已弃牌') return 'status-fold';
+  return 'status-active';
+}
+
+function dealDemoHand() {
+  const room = APP_STATE.rooms[APP_STATE.currentRoomId];
+  const activeSeats = room.seats.filter((seat) => ['已入座', '等待下一局'].includes(seat.status));
+
+  if (activeSeats.length < 2) {
+    el.joinMessage.textContent = '至少需要 2 名玩家入座，才能演示发牌。';
+    return;
+  }
+
+  const deck = createShuffledDeck();
+
+  activeSeats.forEach((seat) => {
+    seat.cards = [deck.pop(), deck.pop()];
+    seat.status = '本手参与中';
+  });
+
+  APP_STATE.board.flop = [deck.pop(), deck.pop(), deck.pop()];
+  APP_STATE.board.turn = deck.pop();
+  APP_STATE.board.river = deck.pop();
+
+  renderBoard();
+  renderSeats();
+  el.joinMessage.textContent = '已完成本地演示发牌（当前显示所有玩家手牌，便于验证）。';
+}
+
+function createShuffledDeck() {
+  const suits = ['♠', '♥', '♣', '♦'];
+  const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+  const deck = [];
+
+  suits.forEach((suit) => {
+    ranks.forEach((rank) => {
+      deck.push(`${rank}${suit}`);
+    });
+  });
+
+  for (let i = deck.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+
+  return deck;
+}
+
+function renderBoard() {
+  renderCards(el.flopCards, APP_STATE.board.flop);
+  renderCards(el.turnCard, APP_STATE.board.turn ? [APP_STATE.board.turn] : []);
+  renderCards(el.riverCard, APP_STATE.board.river ? [APP_STATE.board.river] : []);
+}
+
+function renderCards(container, cards) {
+  container.innerHTML = '';
+  if (!cards.length) {
+    container.innerHTML = '<span class="card-item">--</span>';
+    return;
+  }
+
+  cards.forEach((card) => {
+    const item = document.createElement('span');
+    item.className = 'card-item';
+    item.textContent = card;
+    container.appendChild(item);
+  });
+}
+
+function startCountdownDemo() {
+  if (APP_STATE.countdownTimer) {
+    clearInterval(APP_STATE.countdownTimer);
+  }
+
+  let secondsLeft = APP_STATE.config.actionTimeSeconds;
+  el.countdown.textContent = String(secondsLeft);
+  el.countdown.classList.remove('warning');
+
+  APP_STATE.countdownTimer = setInterval(() => {
+    secondsLeft -= 1;
+    el.countdown.textContent = String(Math.max(0, secondsLeft));
+
+    if (secondsLeft <= 10) {
+      el.countdown.classList.add('warning');
+    }
+
+    if (secondsLeft <= 0) {
+      clearInterval(APP_STATE.countdownTimer);
+      APP_STATE.countdownTimer = null;
+      // 当前阶段先只做提示，不接完整下注逻辑
+      el.joinMessage.textContent = '倒计时结束：后续版本将根据可否过牌自动过牌或自动弃牌，并将玩家设为暂时离开。';
+    }
+  }, 1000);
+}
+
+// 以下函数通过 window 暴露，供座位卡片中的按钮调用。
+window.setAway = function setAway(seatNo) {
+  const room = APP_STATE.rooms[APP_STATE.currentRoomId];
+  const seat = room.seats.find((s) => s.seatNo === seatNo);
+  if (!seat || seat.status === '空位') return;
+
+  if (seat.status === '本手参与中') {
+    seat.status = '已弃牌';
+  } else {
+    seat.status = '暂时离开';
+  }
+
+  renderSeats();
+};
+
+window.returnSeat = function returnSeat(seatNo) {
+  const room = APP_STATE.rooms[APP_STATE.currentRoomId];
+  const seat = room.seats.find((s) => s.seatNo === seatNo);
+  if (!seat || seat.status === '空位') return;
+
+  // 当前手牌是否进行中：只要有人“本手参与中”，则视为当前牌局进行中
+  const handInProgress = room.seats.some((s) => s.status === '本手参与中');
+  seat.status = handInProgress ? '等待下一局' : '已入座';
+
+  renderSeats();
+};
+
+window.kickSeat = function kickSeat(seatNo) {
+  const room = APP_STATE.rooms[APP_STATE.currentRoomId];
+  const seat = room.seats.find((s) => s.seatNo === seatNo);
+  if (!seat || seat.status === '空位') return;
+
+  const shouldKick = window.confirm(`确认剔除 ${seat.nickname || seat.seatNo + '号位'} 吗？`);
+  if (!shouldKick) return;
+
+  // 清算：净输赢 = 带出筹码 - 总买入
+  seat.ledger.carryOutChips = seat.chips;
+  const totalBuyIn = seat.ledger.initialBuyIn + seat.ledger.systemTopUpTotal;
+  seat.ledger.netWinLoss = seat.ledger.carryOutChips - totalBuyIn;
+
+  room.seats[seatNo - 1] = createEmptySeat(seatNo);
+  renderSeatOptions();
+  renderSeats();
+};
