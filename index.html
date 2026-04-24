@@ -45,6 +45,17 @@
               <option value="admin">管理员</option>
             </select>
           </label>
+          <label>
+            视角模式
+            <select id="viewModeSelect">
+              <option value="debug">调试视角（显示所有手牌）</option>
+              <option value="player">玩家视角（仅自己可见）</option>
+            </select>
+          </label>
+          <label>
+            当前查看者
+            <select id="viewerSelect"></select>
+          </label>
           <div class="role-tip">
             角色预留：管理员/房主/玩家。当前 Demo 仅做前端演示。
           </div>
