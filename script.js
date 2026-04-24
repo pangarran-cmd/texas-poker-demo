@@ -38,6 +38,8 @@ const APP_STATE = {
     river: null,
   },
   countdownTimer: null,
+  viewMode: 'debug',
+  viewerNickname: '',
 };
 
 function createRoom(name) {
@@ -73,6 +75,8 @@ const el = {
   roomSelect: document.getElementById('roomSelect'),
   roomCode: document.getElementById('roomCode'),
   roleSelect: document.getElementById('roleSelect'),
+  viewModeSelect: document.getElementById('viewModeSelect'),
+  viewerSelect: document.getElementById('viewerSelect'),
   nicknameInput: document.getElementById('nicknameInput'),
   seatSelect: document.getElementById('seatSelect'),
   joinBtn: document.getElementById('joinBtn'),
@@ -96,6 +100,7 @@ function init() {
   bindEvents();
   renderRoomOptions();
   renderSeatOptions();
+  renderViewerOptions();
   renderSeats();
 }
 
@@ -109,11 +114,22 @@ function bindEvents() {
   el.roomSelect.addEventListener('change', (event) => {
     APP_STATE.currentRoomId = event.target.value;
     renderSeatOptions();
+    renderViewerOptions();
     renderSeats();
   });
 
   el.roleSelect.addEventListener('change', (event) => {
     APP_STATE.currentRole = event.target.value;
+  });
+
+  el.viewModeSelect.addEventListener('change', (event) => {
+    APP_STATE.viewMode = event.target.value;
+    renderSeats();
+  });
+
+  el.viewerSelect.addEventListener('change', (event) => {
+    APP_STATE.viewerNickname = event.target.value;
+    renderSeats();
   });
 
   el.joinBtn.addEventListener('click', handleJoinSeat);
@@ -152,6 +168,34 @@ function renderSeatOptions() {
   });
 }
 
+function renderViewerOptions() {
+  const room = APP_STATE.rooms[APP_STATE.currentRoomId];
+  const seatedNicknames = room.seats
+    .filter((seat) => seat.nickname)
+    .map((seat) => seat.nickname);
+
+  el.viewerSelect.innerHTML = '';
+
+  const emptyOption = document.createElement('option');
+  emptyOption.value = '';
+  emptyOption.textContent = '请选择查看者';
+  el.viewerSelect.appendChild(emptyOption);
+
+  seatedNicknames.forEach((nickname) => {
+    const option = document.createElement('option');
+    option.value = nickname;
+    option.textContent = nickname;
+    el.viewerSelect.appendChild(option);
+  });
+
+  if (APP_STATE.viewerNickname && seatedNicknames.includes(APP_STATE.viewerNickname)) {
+    el.viewerSelect.value = APP_STATE.viewerNickname;
+  } else {
+    APP_STATE.viewerNickname = seatedNicknames[0] || '';
+    el.viewerSelect.value = APP_STATE.viewerNickname;
+  }
+}
+
 function handleJoinSeat() {
   const room = APP_STATE.rooms[APP_STATE.currentRoomId];
   const nickname = el.nicknameInput.value.trim();
@@ -183,6 +227,7 @@ function handleJoinSeat() {
   el.nicknameInput.value = '';
 
   renderSeatOptions();
+  renderViewerOptions();
   renderSeats();
 }
 
@@ -195,7 +240,7 @@ function renderSeats() {
     seatDiv.className = 'seat';
 
     const statusClass = getStatusClass(seat.status);
-    const cards = seat.cards.length ? seat.cards.join(' ') : '-- --';
+    const cards = getSeatCardsForView(seat);
 
     seatDiv.innerHTML = `
       <div class="seat-head">
@@ -227,6 +272,22 @@ function getStatusClass(status) {
   return 'status-active';
 }
 
+function getSeatCardsForView(seat) {
+  if (!seat.cards.length) {
+    return '-- --';
+  }
+
+  if (APP_STATE.viewMode === 'debug') {
+    return seat.cards.join(' ');
+  }
+
+  if (!APP_STATE.viewerNickname) {
+    return '🂠 🂠';
+  }
+
+  return seat.nickname === APP_STATE.viewerNickname ? seat.cards.join(' ') : '🂠 🂠';
+}
+
 function dealDemoHand() {
   const room = APP_STATE.rooms[APP_STATE.currentRoomId];
   const activeSeats = room.seats.filter((seat) => ['已入座', '等待下一局'].includes(seat.status));
@@ -249,7 +310,7 @@ function dealDemoHand() {
 
   renderBoard();
   renderSeats();
-  el.joinMessage.textContent = '已完成本地演示发牌（当前显示所有玩家手牌，便于验证）。';
+  el.joinMessage.textContent = '已完成本地演示发牌（将按当前视角模式展示手牌）。';
 }
 
 function createShuffledDeck() {
@@ -360,5 +421,6 @@ window.kickSeat = function kickSeat(seatNo) {
 
   room.seats[seatNo - 1] = createEmptySeat(seatNo);
   renderSeatOptions();
+  renderViewerOptions();
   renderSeats();
 };
