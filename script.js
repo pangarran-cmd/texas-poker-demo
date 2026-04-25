@@ -99,6 +99,7 @@ const el = {
   bigBlindInput: document.getElementById('bigBlindInput'),
   applyTableConfigBtn: document.getElementById('applyTableConfigBtn'),
   dealBtn: document.getElementById('dealBtn'),
+  advancePhaseBtn: document.getElementById('advancePhaseBtn'),
   flopCards: document.getElementById('flopCards'),
   turnCard: document.getElementById('turnCard'),
   riverCard: document.getElementById('riverCard'),
