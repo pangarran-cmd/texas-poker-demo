@@ -155,8 +155,17 @@ function bindEvents() {
     el.joinMessage.textContent = `已更新牌桌设置：初始筹码 ${APP_STATE.config.initialChips}，小盲/大盲 ${APP_STATE.config.smallBlind}/${APP_STATE.config.bigBlind}`;
   });
 
-  el.dealBtn.addEventListener('click', dealDemoHand);
-  el.startCountdownBtn.addEventListener('click', startCountdownDemo);
+el.dealBtn.addEventListener('click', dealDemoHand);
+
+el.advancePhaseBtn.addEventListener('click', () => {
+  if (typeof advancePhase !== 'function') {
+    el.joinMessage.textContent = '未找到 advancePhase()，请先完成任务 A/B/C 的函数粘贴。';
+    return;
+  }
+  advancePhase();
+});
+
+el.startCountdownBtn.addEventListener('click', startCountdownDemo);
 }
 
 function renderRoomOptions() {
